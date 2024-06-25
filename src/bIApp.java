@@ -69,7 +69,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 	private static int page = 1;
 	private static String query;
 	
-	private static String proxyUrl = "http://nnp.nnchan.ru/proxy.php?";
+	private static String proxyUrl = "http://nnp.nnchan.ru/hproxy.php?";
 	
 	private static Image postPlaceholderImg = null;
 	
