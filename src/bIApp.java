@@ -195,7 +195,9 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			return;
 		}
 		if (c == postItemCmd) {
-			if (running) return;
+			if (running) {
+				while (running) postsForm = null;
+			}
 			Form f = new Form("Post #" + (postItem = (ImageItem) item).getAltText());
 			f.addCommand(backCmd);
 			f.setCommandListener(this);
