@@ -187,8 +187,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 	public void commandAction(Command c, Item item) {
 		if (c == showPostCmd) {
 			try {
-				String url = post.getObject("file").getString("url");
-				if (platformRequest(url)) notifyDestroyed();
+				if (platformRequest(proxyUrl(post.getObject("file").getString("url")))) notifyDestroyed();
 			} catch (Exception e) {
 				e.printStackTrace();
 				display(errorAlert(e.toString()), postForm);
