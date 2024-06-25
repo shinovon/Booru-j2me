@@ -214,7 +214,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			f.setTicker(new Ticker("Loading..."));
 			
 			display(postsForm = f);
-			query = c == searchCmd ? null : searchField.getString().trim();
+			query = c == searchCmd ? searchField.getString().trim() : null;
 			start(c == searchCmd ? RUN_SEARCH : RUN_POSTS);
 			return;
 		}
