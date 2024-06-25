@@ -30,7 +30,10 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 	private static final int RUN_SEARCH = 2;
 	private static final int RUN_POST = 3;
 	
-	private static String APIURL = "https://e621.net/";
+	private static final String APIURL = "https://e621.net/";
+	
+	private static final Font smallfont = Font.getFont(0, 0, Font.SIZE_SMALL);
+	private static final Font smallboldfont = Font.getFont(0, Font.STYLE_BOLD, Font.SIZE_SMALL);
 
 	private static boolean started;
 	private static bIApp midlet;
@@ -45,6 +48,10 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 	
 	private static Command showPostCmd;
 	private static Command downloadCmd;
+
+	private static Command prevPageCmd;
+	private static Command nextPageCmd;
+	private static Command nPageCmd;
 	
 	private static Form mainForm;
 	private static Form postsForm;
@@ -58,7 +65,8 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 	private static String version;
 	
 	private static int limit = 10;
-	private static int page;
+	private static int page = 1;
+	private static String query;
 	
 	private static String proxyUrl = "http://nnp.nnchan.ru/proxy.php?";
 	
@@ -92,6 +100,9 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 
 		backCmd = new Command("Back", Command.EXIT, 2);
 		postItemCmd = new Command("Open", Command.ITEM, 1);
+		nextPageCmd = new Command("Next page", Command.SCREEN, 2);
+		prevPageCmd = new Command("Prev. page", Command.SCREEN, 3);
+		nPageCmd = new Command("Go to page", Command.ITEM, 2);
 		
 		showPostCmd = new Command("Open", Command.ITEM, 1);
 		downloadCmd = new Command("Download", Command.ITEM, 1);
@@ -152,6 +163,22 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			display(mainForm);
 			return;
 		}
+		if (c == nextPageCmd || c == prevPageCmd) {
+			if (running) return;
+			if (c == nextPageCmd) ++page;
+			else {
+				if (--page < 0) page = 0;
+			}
+			Form f = new Form("Posts");
+			f.addCommand(backCmd);
+			f.setCommandListener(this);
+			
+			f.setTicker(new Ticker("Loading..."));
+			
+			display(postsForm = f);
+			start(query != null ? RUN_SEARCH : RUN_POSTS);
+			return;
+		}
 	}
 
 	public void commandAction(Command c, Item item) {
@@ -184,9 +211,24 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			f.setTicker(new Ticker("Loading..."));
 			
 			display(postsForm = f);
+			query = c == searchCmd ? null : searchField.getString().trim();
 			start(c == searchCmd ? RUN_SEARCH : RUN_POSTS);
 			return;
 		}
+		if (c == nPageCmd) {
+			if (running) return;
+			page = Integer.parseInt(((StringItem) item).getText());
+			Form f = new Form("Posts");
+			f.addCommand(backCmd);
+			f.setCommandListener(this);
+			
+			f.setTicker(new Ticker("Loading..."));
+			
+			display(postsForm = f);
+			start(query != null ? RUN_SEARCH : RUN_POSTS);
+			return;
+		}
+		commandAction(c, display.getCurrent());
 	}
 
 	public void run() {
@@ -200,13 +242,42 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 		case RUN_SEARCH: 
 		case RUN_POSTS: {
 			try {
-				StringBuffer sb = new StringBuffer(APIURL).append("posts.json?limit=").append(limit);
-				if (run == RUN_SEARCH) {
-					sb.append("&tags=").append(url(searchField.getString().trim()));
+				Form f = postsForm;
+				
+				StringBuffer sb = new StringBuffer(run == RUN_SEARCH ? "Search" : "Posts");
+				if (page > 1) {
+					sb.append(" (").append(page).append(')');
+					postsForm.addCommand(prevPageCmd);
+					
+					f.append(pageButton(-1));
 				}
+				
+				postsForm.setTitle(sb.toString());
+				
+				sb.setLength(0);
+				sb.append(APIURL).append("posts.json?limit=").append(limit);
+				if (run == RUN_SEARCH) {
+					sb.append("&tags=").append(url(query));
+				}
+				
+				f.addCommand(nextPageCmd);
+				
 				if (page > 0) {
 					sb.append("&page=").append(page);
 				}
+				
+				f.append(pageButton(1));
+				
+				if (page > 2) f.append(pageButton(page - 1));
+				if (page > 1) f.append(pageButton(page));
+				f.append(pageButton(page + 1));
+				if (page < 2) f.append(pageButton(page + 2));
+				
+				StringItem s = pageButton(0);
+				s.setLayout(Item.LAYOUT_SHRINK | Item.LAYOUT_NEWLINE_AFTER);
+				
+				f.append(s);
+				
 				
 				JSONArray posts = JSON.getObject(getUtf(proxyUrl(sb.toString()))).getArray("posts");
 				
@@ -230,6 +301,8 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 					
 					postsForm.append(item);
 				}
+			} catch (NullPointerException e) {
+				break;
 			} catch (Exception e) {
 				e.printStackTrace();
 				display(errorAlert(e.toString()), postsForm);
@@ -277,6 +350,17 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 				wait();
 			}
 		} catch (Exception e) {}
+	}
+	
+	private StringItem pageButton(int n) {
+		StringItem s = new StringItem(null, n == -1 ? "<" : n == 0 ? ">" : Integer.toString(n), StringItem.BUTTON);
+		s.setLayout(Item.LAYOUT_SHRINK);
+		s.setFont(page == n ? smallboldfont : smallfont);
+		Command c = n == -1 ? prevPageCmd : n == 0 ? nextPageCmd : nPageCmd;
+		s.addCommand(c);
+		s.setDefaultCommand(c);
+		s.setItemCommandListener(this);
+		return s;
 	}
 	
 	private static void display(Alert a, Displayable d) {
