@@ -1,5 +1,6 @@
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Vector;
 
 import javax.microedition.io.Connector;
 import javax.microedition.io.HttpConnection;
@@ -241,9 +242,8 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 		switch (run) {
 		case RUN_SEARCH: 
 		case RUN_POSTS: {
+			Form f = postsForm;
 			try {
-				Form f = postsForm;
-				
 				StringBuffer sb = new StringBuffer(run == RUN_SEARCH ? "Search" : "Posts");
 				if (page > 1) {
 					sb.append(" (").append(page).append(')');
@@ -275,31 +275,34 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 				
 				StringItem s = pageButton(0);
 				s.setLayout(Item.LAYOUT_SHRINK | Item.LAYOUT_NEWLINE_AFTER);
-				
 				f.append(s);
 				
 				
 				JSONArray posts = JSON.getObject(getUtf(proxyUrl(sb.toString()))).getArray("posts");
 				
+				Vector items = new Vector();
 				ImageItem item;
 				
 				int l = posts.size();
-				for (int i = 0; i < l && postsForm != null; i++) {
-					JSONObject post = posts.getObject(i);
-					
+				for (int i = 0; i < l; i++) {
 					item = new ImageItem("",
 							postPlaceholderImg,
 							Item.LAYOUT_LEFT | Item.LAYOUT_TOP,
-							post.getString("id"));
+							posts.getObject(i).getString("id"));
 					
 					item.addCommand(postItemCmd);
 					item.setDefaultCommand(postItemCmd);
 					item.setItemCommandListener(this);
 					
-					String u = post.getObject("preview").getString("url");
-					if (u != null) item.setImage(getImage(proxyUrl(u)));
-					
-					postsForm.append(item);
+					f.append(item);
+					items.addElement(item);
+				}
+
+				// load images
+				String url;
+				for (int i = 0; i < l && postsForm != null; i++) {
+					if ((url = posts.getObject(i).getObject("preview").getString("url")) != null)
+						((ImageItem) items.elementAt(i)).setImage(getImage(proxyUrl(url)));
 				}
 			} catch (NullPointerException e) {
 				break;
@@ -308,7 +311,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 				display(errorAlert(e.toString()), postsForm);
 			}
 			
-			postsForm.setTicker(null);
+			f.setTicker(null);
 			break;
 		}
 		case RUN_POST: {
