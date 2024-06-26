@@ -91,7 +91,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 
 	protected void startApp() {
 		if (started) return;
-		started = false;
+		started = true;
 		
 		version = getAppProperty("MIDlet-Version");
 		display = Display.getDisplay(this);
