@@ -1,5 +1,6 @@
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Hashtable;
 import java.util.Vector;
 
 import javax.microedition.io.Connector;
@@ -70,6 +71,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 	
 	private static Object thumbLoadLock = new Object();
 	private static Vector thumbsToLoad = new Vector();
+	private static Hashtable previewUrlsCache = new Hashtable();
 	
 	private static String proxyUrl = "http://nnp.nnchan.ru/hproxy.php?";
 	
@@ -161,6 +163,17 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 		if (d == postForm) {
 			if (c == backCmd) {
 				display(postsForm);
+				try {
+					int l = postsForm.size();
+					
+					// resume loading
+					for (int i = 0; i < l; i++) {
+						Item item = postsForm.get(i);
+						if (!(item instanceof ImageItem)) continue;
+						if (((ImageItem) item).getImage() != null) continue;
+						scheduleThumb((ImageItem) item, (String) previewUrlsCache.get(((ImageItem) item).getAltText()));
+					}
+				} catch (Exception e) {}
 				post = null;
 				postForm = null;
 				return;
@@ -292,6 +305,8 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 		switch (run) {
 		case RUN_POSTS: {
 			Form f = postsForm;
+			previewUrlsCache.clear();
+			
 			try {
 				StringBuffer sb = new StringBuffer(query != null ? "Search" : "Posts");
 				if (page > 1) {
@@ -332,18 +347,22 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 				int l = posts.size();
 				String url;
 				for (int i = 0; i < l; i++) {
+					JSONObject p = posts.getObject(i);
+					String id = p.getString("id");
+					
 					item = new ImageItem("",
 							postPlaceholderImg,
 							Item.LAYOUT_LEFT | Item.LAYOUT_TOP,
-							posts.getObject(i).getString("id"));
-					
+							id);
 					item.addCommand(postItemCmd);
 					item.setDefaultCommand(postItemCmd);
 					item.setItemCommandListener(this);
-					
 					f.append(item);
-					if ((url = posts.getObject(i).getObject("preview").getString("url")) != null)
-						scheduleCover(item, url);
+					
+					if ((url = p.getObject("preview").getString("url")) != null) {
+						scheduleThumb(item, url);
+						previewUrlsCache.put(id, url);
+					}
 				}
 			} catch (NullPointerException e) {
 				break;
