@@ -28,21 +28,22 @@ import cc.nnproject.json.JSONObject;
 public class bIApp extends MIDlet implements Runnable, CommandListener, ItemCommandListener {
 	
 	private static final int RUN_POSTS = 1;
-	private static final int RUN_SEARCH = 2;
-	private static final int RUN_POST = 3;
+	private static final int RUN_POST = 2;
+	private static final int RUN_THUMBNAILS = 3;
 	
 	private static final String APIURL = "https://e621.net/";
-	
+
+	private static final Font largefont = Font.getFont(0, 0, Font.SIZE_LARGE);
 	private static final Font smallfont = Font.getFont(0, 0, Font.SIZE_SMALL);
 	private static final Font selectedpagefont = Font.getFont(0, Font.STYLE_BOLD | Font.STYLE_ITALIC, Font.SIZE_SMALL);
 
 	private static boolean started;
-	private static bIApp midlet;
 	private static Display display;
 	
 	private static Command exitCmd;
 	private static Command searchCmd;
 	private static Command postsCmd;
+	private static Command aboutCmd;
 	
 	private static Command backCmd;
 	private static Command postItemCmd;
@@ -63,30 +64,28 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 	private static int run;
 	private static boolean running;
 	
-	private static String version;
-	
 	private static int limit = 10;
 	private static int page = 1;
 	private static String query;
+	
+	private static Object thumbLoadLock = new Object();
+	private static Vector thumbsToLoad = new Vector();
 	
 	private static String proxyUrl = "http://nnp.nnchan.ru/hproxy.php?";
 	
 	private static Image postPlaceholderImg = null;
 	
 	private static ImageItem postItem;
+	private static String postId;
 	private static JSONObject post;
+	
+	private static String version;
 
-	public bIApp() {
-		midlet = this;
-	}
+	public bIApp() {}
 
-	protected void destroyApp(boolean unconditional) {
+	protected void destroyApp(boolean unconditional) {}
 
-	}
-
-	protected void pauseApp() {
-
-	}
+	protected void pauseApp() {}
 
 	protected void startApp() {
 		if (started) return;
@@ -98,6 +97,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 		exitCmd = new Command("Exit", Command.EXIT, 2);
 		searchCmd = new Command("Search", Command.ITEM, 1);
 		postsCmd = new Command("Posts", Command.ITEM, 1);
+		aboutCmd = new Command("About", Command.SCREEN, 4);
 
 		backCmd = new Command("Back", Command.EXIT, 2);
 		postItemCmd = new Command("Open", Command.ITEM, 1);
@@ -109,6 +109,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 		downloadCmd = new Command("Download", Command.ITEM, 1);
 		
 		Form f = new Form("ы");
+		f.addCommand(aboutCmd);
 		f.addCommand(exitCmd);
 		f.setCommandListener(this);
 		
@@ -138,6 +139,15 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 		f.append(s);
 		
 		display.setCurrent(mainForm = f);
+		
+		// start thumbnails loader thread
+		start(RUN_THUMBNAILS);
+		
+		// start second thread on symbian
+		String p = System.getProperty("microedition.platform");
+		if (p != null && p.indexOf("platform=S60") != -1) {
+			start(RUN_THUMBNAILS);
+		}
 	}
 
 	public void commandAction(Command c, Displayable d) {
@@ -164,6 +174,33 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			display(mainForm);
 			return;
 		}
+		if (c == aboutCmd) {
+			// о программе
+			Form f = new Form("About");
+			f.addCommand(backCmd);
+			f.setCommandListener(this);
+			
+			StringItem s;
+			s = new StringItem(null, "unnamed e621 j2me reader v" + version);
+			s.setFont(largefont);
+			s.setLayout(Item.LAYOUT_NEWLINE_AFTER | Item.LAYOUT_NEWLINE_BEFORE);
+			f.append(s);
+
+			s = new StringItem("Developer", "shinovon");
+			s.setLayout(Item.LAYOUT_NEWLINE_BEFORE | Item.LAYOUT_NEWLINE_AFTER | Item.LAYOUT_LEFT);
+			s.setFont(Font.getDefaultFont());
+			f.append(s);
+
+			s = new StringItem("Chat", "t.me/nnmidletschat");
+			s.setLayout(Item.LAYOUT_NEWLINE_BEFORE | Item.LAYOUT_NEWLINE_AFTER | Item.LAYOUT_LEFT);
+			f.append(s);
+			
+			s = new StringItem(null, "\n292 labs (tm)");
+			s.setLayout(Item.LAYOUT_NEWLINE_BEFORE | Item.LAYOUT_NEWLINE_AFTER | Item.LAYOUT_LEFT);
+			f.append(s);
+			display(f);
+			return;
+		}
 		if (c == nextPageCmd || c == prevPageCmd) {
 			if (running) {
 				while (running) postsForm = null;
@@ -179,7 +216,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			f.setTicker(new Ticker("Loading..."));
 			
 			display(postsForm = f);
-			start(query != null ? RUN_SEARCH : RUN_POSTS);
+			start(RUN_POSTS);
 			return;
 		}
 	}
@@ -198,7 +235,9 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			if (running) {
 				while (running) postsForm = null;
 			}
-			Form f = new Form("Post #" + (postItem = (ImageItem) item).getAltText());
+			thumbsToLoad.removeAllElements();
+			
+			Form f = new Form("Post #" + (postId = (postItem = (ImageItem) item).getAltText()));
 			f.addCommand(backCmd);
 			f.setCommandListener(this);
 			
@@ -208,6 +247,8 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 		}
 		if (c == searchCmd || c == postsCmd) {
 			if (running) return;
+			thumbsToLoad.removeAllElements();
+			
 			Form f = new Form("Posts");
 			f.addCommand(backCmd);
 			f.setCommandListener(this);
@@ -216,14 +257,18 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			
 			display(postsForm = f);
 			query = c == searchCmd ? searchField.getString().trim() : null;
-			start(c == searchCmd ? RUN_SEARCH : RUN_POSTS);
+			start(RUN_POSTS);
 			return;
 		}
 		if (c == nPageCmd) {
 			if (running) {
 				while (running) postsForm = null;
 			}
-			page = Integer.parseInt(((StringItem) item).getText());
+			int n = Integer.parseInt(((StringItem) item).getText());
+			if (n == page) return;
+			page = n;
+			thumbsToLoad.removeAllElements();
+			
 			Form f = new Form("Posts");
 			f.addCommand(backCmd);
 			f.setCommandListener(this);
@@ -231,7 +276,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			f.setTicker(new Ticker("Loading..."));
 			
 			display(postsForm = f);
-			start(query != null ? RUN_SEARCH : RUN_POSTS);
+			start(RUN_POSTS);
 			return;
 		}
 		commandAction(c, display.getCurrent());
@@ -243,13 +288,12 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			run = bIApp.run;
 			notify();
 		}
-		running = true;
+		running = run != RUN_THUMBNAILS;
 		switch (run) {
-		case RUN_SEARCH: 
 		case RUN_POSTS: {
 			Form f = postsForm;
 			try {
-				StringBuffer sb = new StringBuffer(run == RUN_SEARCH ? "Search" : "Posts");
+				StringBuffer sb = new StringBuffer(query != null ? "Search" : "Posts");
 				if (page > 1) {
 					sb.append(" (").append(page).append(')');
 					f.addCommand(prevPageCmd);
@@ -273,7 +317,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 				
 				sb.setLength(0);
 				sb.append(APIURL).append("posts.json?limit=").append(limit);
-				if (run == RUN_SEARCH) {
+				if (query != null) {
 					sb.append("&tags=").append(url(query));
 				}
 				
@@ -283,10 +327,10 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 				
 				JSONArray posts = JSON.getObject(getUtf(proxyUrl(sb.toString()))).getArray("posts");
 				
-				Vector items = new Vector();
 				ImageItem item;
 				
 				int l = posts.size();
+				String url;
 				for (int i = 0; i < l; i++) {
 					item = new ImageItem("",
 							postPlaceholderImg,
@@ -298,48 +342,92 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 					item.setItemCommandListener(this);
 					
 					f.append(item);
-					items.addElement(item);
-				}
-
-				// load images
-				String url;
-				for (int i = 0; i < l && postsForm != null; i++) {
 					if ((url = posts.getObject(i).getObject("preview").getString("url")) != null)
-						((ImageItem) items.elementAt(i)).setImage(getImage(proxyUrl(url)));
+						scheduleCover(item, url);
 				}
 			} catch (NullPointerException e) {
 				break;
 			} catch (Exception e) {
 				e.printStackTrace();
-				display(errorAlert(e.toString()), postsForm);
+				display(errorAlert(e.toString()), f);
 			}
 			
 			f.setTicker(null);
 			break;
 		}
 		case RUN_POST: {
-			String id = postItem.getAltText();
-			Image thumb = postItem.getImage();
-			
+			String id = postId;
+			Image thumb = postItem != null ? postItem.getImage() : null;
 			postItem = null;
+			
+			Form f = postForm;
 			
 			ImageItem item = new ImageItem("", thumb, Item.LAYOUT_LEFT, id);
 			
 			item.addCommand(showPostCmd);
 			item.setDefaultCommand(showPostCmd);
 			item.setItemCommandListener(this);
-			postForm.append(item);
+			f.append(item);
 			
 			try {
 				post = JSON.getObject(getUtf(proxyUrl(APIURL + "posts/" + id + ".json"))).getObject("post");
 				
+				if (thumb == null) {
+					String url;
+					if ((url = post.getObject("preview").getString("url")) != null)
+						scheduleThumb(item, url);
+				}
+				
 				// TODO
-				postForm.append(post.toString());
+				f.append(post.toString());
 			} catch (Exception e) {
 				e.printStackTrace();
-				display(errorAlert(e.toString()), postForm);
+				display(errorAlert(e.toString()), f);
 			}
 			break;
+		}
+		case RUN_THUMBNAILS: { // background thumbnails loader thread
+			try {
+				while (true) {
+					synchronized (thumbLoadLock) {
+						thumbLoadLock.wait();
+					}
+					Thread.sleep(200);
+					while (thumbsToLoad.size() > 0) {
+						int i = 0;
+						Object[] o = null;
+						
+						try {
+							synchronized (thumbLoadLock) {
+								o = (Object[]) thumbsToLoad.elementAt(i);
+								thumbsToLoad.removeElementAt(i);
+							}
+						} catch (Exception e) {
+							continue;
+						}
+						
+						if (o == null) continue;
+						
+						String url = (String) o[0];
+						ImageItem item = (ImageItem) o[1];
+						
+						try { 
+							Image img = getImage(proxyUrl(url));
+
+//							int h = getHeight() / 3;
+//							int w = (int) (((float) h / img.getHeight()) * img.getWidth());
+//							img = resize(img, w, h);
+							
+							item.setImage(img);
+						} catch (Exception e) {
+							e.printStackTrace();
+						} 
+					}
+				}
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+			return;
 		}
 		}
 		running = false;
@@ -364,6 +452,12 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 		s.setDefaultCommand(c);
 		s.setItemCommandListener(this);
 		return s;
+	}
+	private static void scheduleThumb(ImageItem img, String url) {
+		synchronized (thumbLoadLock) {
+			thumbsToLoad.addElement(new Object[] { url, img });
+			thumbLoadLock.notifyAll();
+		}
 	}
 	
 	private static void display(Alert a, Displayable d) {
