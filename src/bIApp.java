@@ -164,9 +164,8 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			if (c == backCmd) {
 				display(postsForm);
 				try {
-					int l = postsForm.size();
-					
 					// resume loading
+					int l = postsForm.size();
 					for (int i = 0; i < l; i++) {
 						Item item = postsForm.get(i);
 						if (!(item instanceof ImageItem)) continue;
@@ -347,7 +346,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 					item = new ImageItem("",
 							postPlaceholderImg,
 							Item.LAYOUT_LEFT | Item.LAYOUT_TOP,
-							id);
+							id, Item.BUTTON);
 					item.addCommand(postItemCmd);
 					item.setDefaultCommand(postItemCmd);
 					item.setItemCommandListener(this);
@@ -375,7 +374,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			
 			Form f = postForm;
 			
-			ImageItem item = new ImageItem("", thumb, Item.LAYOUT_LEFT, id);
+			ImageItem item = new ImageItem("", thumb, Item.LAYOUT_LEFT, id, Item.BUTTON);
 			
 			item.addCommand(showPostCmd);
 			item.setDefaultCommand(showPostCmd);
