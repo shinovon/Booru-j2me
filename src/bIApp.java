@@ -215,9 +215,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			return;
 		}
 		if (c == nextPageCmd || c == prevPageCmd) {
-			if (running) {
-				while (running) postsForm = null;
-			}
+			if (running) return;
 			if (c == nextPageCmd) ++page;
 			else {
 				if (--page < 0) page = 0;
@@ -245,9 +243,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			return;
 		}
 		if (c == postItemCmd) {
-			if (running) {
-				while (running) postsForm = null;
-			}
+			if (running) return;
 			thumbsToLoad.removeAllElements();
 			
 			Form f = new Form("Post #" + (postId = (postItem = (ImageItem) item).getAltText()));
@@ -274,9 +270,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			return;
 		}
 		if (c == nPageCmd) {
-			if (running) {
-				while (running) postsForm = null;
-			}
+			if (running) return;
 			int n = Integer.parseInt(((StringItem) item).getText());
 			if (n == page) return;
 			page = n;
