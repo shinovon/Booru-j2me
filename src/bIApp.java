@@ -224,7 +224,15 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			s.setFont(Font.getDefaultFont());
 			f.append(s);
 
-			s = new StringItem("Chat", "t.me/nnmidletschat");
+			s = new StringItem("Requested by", "GingerFox87, rmn20");
+			s.setLayout(Item.LAYOUT_NEWLINE_BEFORE | Item.LAYOUT_NEWLINE_AFTER | Item.LAYOUT_LEFT);
+			f.append(s);
+
+			s = new StringItem("GitHub", "github.com/shinovon");
+			s.setLayout(Item.LAYOUT_NEWLINE_BEFORE | Item.LAYOUT_NEWLINE_AFTER | Item.LAYOUT_LEFT);
+			f.append(s);
+
+			s = new StringItem("Web", "nnp.nnchan.ru");
 			s.setLayout(Item.LAYOUT_NEWLINE_BEFORE | Item.LAYOUT_NEWLINE_AFTER | Item.LAYOUT_LEFT);
 			f.append(s);
 			
