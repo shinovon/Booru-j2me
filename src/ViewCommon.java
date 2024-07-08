@@ -93,7 +93,6 @@ public class ViewCommon extends Canvas implements Runnable {
 					prepare();
 					repaint();
 					resize(1);
-					repaint();
 					zoom = 1;
 				} catch (Exception e) {
 					error = true;

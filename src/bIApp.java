@@ -655,19 +655,19 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 				case API_GELBOORU:
 					s = new StringItem("Tags", post.getString("tags", ""));
 					s.setLayout(Item.LAYOUT_LEFT | Item.LAYOUT_LEFT | Item.LAYOUT_NEWLINE_AFTER);
-					s.setFont(medboldfont);
+					s.setFont(smallfont);
 					f.append(s);
 					break;
 				case API_SAFEBOORU:
 					s = new StringItem("Tags", post.getString("tags", ""));
 					s.setLayout(Item.LAYOUT_LEFT | Item.LAYOUT_LEFT | Item.LAYOUT_NEWLINE_AFTER);
-					s.setFont(medboldfont);
+					s.setFont(smallfont);
 					f.append(s);
 					break;
 				case API_YANDERE:
 					s = new StringItem("Tags", post.getString("tags", ""));
 					s.setLayout(Item.LAYOUT_LEFT | Item.LAYOUT_LEFT | Item.LAYOUT_NEWLINE_AFTER);
-					s.setFont(medboldfont);
+					s.setFont(smallfont);
 					f.append(s);
 					break;
 				default:
@@ -727,6 +727,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 		case RUN_ZOOM_VIEW: {
 			if (view == null) break;
 			view.resize((int) view.zoom);
+			view.repaint();
 			break;
 		}
 		}
