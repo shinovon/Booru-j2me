@@ -82,7 +82,6 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 	private static final String SETTINGS_RMS = "boorusets";
 
 	private static final Font largefont = Font.getFont(0, 0, Font.SIZE_LARGE);
-	private static final Font medboldfont = Font.getFont(0, Font.STYLE_BOLD, Font.SIZE_MEDIUM);
 	static final Font smallfont = Font.getFont(0, 0, Font.SIZE_SMALL);
 	private static final Font selectedpagefont = Font.getFont(0, Font.STYLE_BOLD | Font.STYLE_ITALIC, Font.SIZE_SMALL);
 
@@ -234,32 +233,18 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 	}
 
 	public void commandAction(Command c, Displayable d) {
-		if (d == postsForm) {
-			if (c == backCmd) {
-				display(mainForm);
-				posts.clear();
-				previewUrlsCache.clear();
-				postsForm = null;
-				return;
-			}
+		if (d == postsForm && c == backCmd) {
+			display(mainForm);
+			posts.clear();
+			previewUrlsCache.clear();
+			postsForm = null;
+			return;
 		}
-		if (d == postForm) {
-			if (c == backCmd) {
-				display(postsForm);
-				try {
-					// resume loading
-					int l = postsForm.size();
-					for (int i = 0; i < l; i++) {
-						Item item = postsForm.get(i);
-						if (!(item instanceof ImageItem)) continue;
-						if (((ImageItem) item).getImage() != null) continue;
-						scheduleThumb((ImageItem) item, (String) previewUrlsCache.get(((ImageItem) item).getAltText()));
-					}
-				} catch (Exception e) {}
-				post = null;
-				postForm = null;
-				return;
-			}
+		if (d == postForm && c == backCmd) {
+			display(postsForm);
+			post = null;
+			postForm = null;
+			return;
 		}
 		if (c == nextPageCmd || c == prevPageCmd) {
 			if (running) return;
@@ -340,7 +325,6 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 
 			proxyField = new TextField("Proxy URL", proxyUrl, 200, TextField.URL);
 			f.append(proxyField);
-			
 			
 			display(settingsForm = f);
 			return;
@@ -842,6 +826,19 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 		display.setCurrent(d);
 		if (p instanceof ViewCommon) {
 			view = null;
+		}
+		if (p == mainForm) return;
+		if (d == postsForm) {
+			try {
+				// resume loading
+				int l = postsForm.size();
+				for (int i = 0; i < l; i++) {
+					Item item = postsForm.get(i);
+					if (!(item instanceof ImageItem)) continue;
+					if (((ImageItem) item).getImage() != null) continue;
+					scheduleThumb((ImageItem) item, (String) previewUrlsCache.get(((ImageItem) item).getAltText()));
+				}
+			} catch (Exception e) {}
 		}
 	}
 
