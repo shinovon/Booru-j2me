@@ -257,7 +257,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			s.setFont(Font.getDefaultFont());
 			f.append(s);
 
-			s = new StringItem("Requested by", "GingerFox87, rmn20");
+			s = new StringItem("Idea", "GingerFox87, rmn20");
 			s.setLayout(Item.LAYOUT_NEWLINE_BEFORE | Item.LAYOUT_NEWLINE_AFTER | Item.LAYOUT_LEFT);
 			f.append(s);
 
@@ -626,6 +626,8 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 
 	private String getFile(JSONObject p) {
 		if (apiMode == API_DANBOORU || apiMode == API_GELBOORU) {
+			if (p.has("large_file_url"))
+				return p.getString("large_file_url");
 			return p.getString("file_url");
 		}
 		if (apiMode == API_E621) {
