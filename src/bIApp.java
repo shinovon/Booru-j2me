@@ -28,6 +28,7 @@ import javax.microedition.io.Connector;
 import javax.microedition.io.HttpConnection;
 import javax.microedition.lcdui.Alert;
 import javax.microedition.lcdui.AlertType;
+import javax.microedition.lcdui.ChoiceGroup;
 import javax.microedition.lcdui.Command;
 import javax.microedition.lcdui.CommandListener;
 import javax.microedition.lcdui.Display;
@@ -42,6 +43,7 @@ import javax.microedition.lcdui.StringItem;
 import javax.microedition.lcdui.TextField;
 import javax.microedition.lcdui.Ticker;
 import javax.microedition.midlet.MIDlet;
+import javax.microedition.rms.RecordStore;
 
 import cc.nnproject.json.AbstractJSON;
 import cc.nnproject.json.JSON;
@@ -53,20 +55,31 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 	private static final int RUN_POSTS = 1;
 	private static final int RUN_POST = 2;
 	private static final int RUN_THUMBNAILS = 3;
-	static final int RUN_ZOOM_VIEW = 5;
+	static final int RUN_ZOOM_VIEW = 4;
 	
-	private static final int API_DANBOORU = 1;
-	private static final int API_GELBOORU = 2;
-	private static final int API_SAFEBOORU = 3;
-	private static final int API_YANDERE = 4;
-	private static final int API_E621 = 5;
+	private static final int API_DANBOORU = 0;
+	private static final int API_GELBOORU = 1;
+	private static final int API_SAFEBOORU = 2;
+	private static final int API_YANDERE = 3;
+	private static final int API_E621 = 4;
 	
-	private static final String DANBOORU_URL = "https://danbooru.donmai.us/";
-	private static final String GELBOORU_URL = "https://gelbooru.com/";
-	private static final String SAFEBOORU_URL = "https://safebooru.org/";
-	private static final String YANDERE_URL = "https://yande.re/";
-	private static final String E621_URL = "https://e621.net/";
-
+	private static final String[] API_URLS = {
+			"https://danbooru.donmai.us/",
+			"https://gelbooru.com/",
+			"https://safebooru.org/",
+			"https://yande.re/",
+			"https://e621.net/",
+	};
+	
+	private static final String[] API_NAMES = {
+			"Danbooru",
+			"Gelbooru",
+			"Safebooru",
+			"yande.re",
+			"e621",
+	};
+	
+	private static final String SETTINGS_RMS = "boorusets";
 
 	private static final Font largefont = Font.getFont(0, 0, Font.SIZE_LARGE);
 	private static final Font medboldfont = Font.getFont(0, Font.STYLE_BOLD, Font.SIZE_MEDIUM);
@@ -80,6 +93,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 	private static Command searchCmd;
 	private static Command postsCmd;
 	private static Command aboutCmd;
+	private static Command settingsCmd;
 	
 	private static Command backCmd;
 	private static Command postItemCmd;
@@ -94,9 +108,17 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 	private static Form mainForm;
 	private static Form postsForm;
 	private static Form postForm;
+	private static Form settingsForm;
 	private static ViewCommon view;
 	
 	private static TextField searchField;
+	private static StringItem mainLabel;
+
+	private static ChoiceGroup limitChoice;
+	private static ChoiceGroup apiChoice;
+	private static TextField proxyField;
+	private static ChoiceGroup viewChoice;
+	private static ChoiceGroup onlineChoice;
 	
 	private static int run;
 	private static boolean running;
@@ -113,9 +135,10 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 	// settings
 	private static String proxyUrl = "http://nnp.nnchan.ru/hproxy.php?";
 	private static int apiMode = API_DANBOORU;
-	static int viewMode = 1;
+	private static int viewMode = 1;
 	static boolean onlineResize = true;
 	static boolean keepBitmap;
+//	private static int thumbSize;
 	
 	private static Image postPlaceholderImg = null;
 	
@@ -141,6 +164,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 		exitCmd = new Command("Exit", Command.EXIT, 2);
 		searchCmd = new Command("Search", Command.ITEM, 1);
 		postsCmd = new Command("Posts", Command.ITEM, 1);
+		settingsCmd = new Command("Settings", Command.SCREEN, 3);
 		aboutCmd = new Command("About", Command.SCREEN, 4);
 
 		backCmd = new Command("Back", Command.EXIT, 2);
@@ -152,39 +176,32 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 		showPostCmd = new Command("Open", Command.ITEM, 1);
 		downloadCmd = new Command("Download", Command.ITEM, 1);
 		
-		Form f = new Form("ы");
-		f.addCommand(aboutCmd);
-		f.addCommand(exitCmd);
-		f.setCommandListener(this);
+		try {
+			RecordStore r = RecordStore.openRecordStore(SETTINGS_RMS, false);
+			JSONObject j = JSON.getObject(new String(r.getRecord(1), "UTF-8"));
+			r.closeRecordStore();
+			
+			proxyUrl = j.getString("proxy", proxyUrl);
+			limit = j.getInt("limit", limit);
+			apiMode = j.getInt("apiMode", apiMode);
+//			thumbSize = j.getInt("thumbSize", thumbSize);
+			viewMode = j.getInt("viewMode", viewMode);
+			keepBitmap = j.getBoolean("keepBitmap", keepBitmap);
+			onlineResize = j.getBoolean("onlineResize", onlineResize);
+		} catch (Exception e) {}
 		
-		String t;
-		switch (apiMode) {
-		case API_DANBOORU:
-			t = "Danbooru";
-			break;
-		case API_GELBOORU:
-			t = "Gelbooru";
-			break;
-		case API_SAFEBOORU:
-			t = "Safebooru";
-			break;
-		case API_E621:
-			t = "e621";
-			break;
-		case API_YANDERE:
-			t = "yande.re";
-			break;
-		default:
-			t = "something";
-			break;
-		}
+		Form f = new Form("ы");
+		f.addCommand(exitCmd);
+		f.addCommand(settingsCmd);
+		f.addCommand(aboutCmd);
+		f.setCommandListener(this);
 		
 		StringItem s;
 		
-		s = new StringItem(null, t);
+		s = new StringItem(null, API_NAMES[apiMode]);
 		s.setFont(Font.getFont(0, Font.STYLE_BOLD, Font.SIZE_LARGE));
 		s.setLayout(Item.LAYOUT_CENTER | Item.LAYOUT_NEWLINE_AFTER);
-		f.append(s);
+		f.append(mainLabel = s);
 		
 		searchField = new TextField("Tags", "", 200, TextField.NON_PREDICTIVE);
 		f.append(searchField);
@@ -290,6 +307,73 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			}
 			return;
 		}
+		if (c == settingsCmd) {
+			if (settingsForm != null) {
+				display(settingsForm);
+				return;
+			}
+			Form f = new Form("Settings");
+			f.addCommand(backCmd);
+			f.setCommandListener(this);
+			
+			apiChoice = new ChoiceGroup("API", ChoiceGroup.EXCLUSIVE, API_NAMES, null);
+			apiChoice.setSelectedIndex(apiMode, true);
+			f.append(apiChoice);
+			
+			limitChoice = new ChoiceGroup("Posts per page", ChoiceGroup.POPUP, new String[] {
+					"5", "10", "15", "20", "25", "30"
+			}, null);
+			limitChoice.setSelectedIndex(Math.max(0, limit / 5 - 1), true);
+			f.append(limitChoice);
+			
+			viewChoice = new ChoiceGroup("View mode", ChoiceGroup.POPUP, new String[] {
+					"Auto", "SWR", "HWA"
+			}, null);
+			viewChoice.setSelectedIndex(viewMode, true);
+			f.append(viewChoice);
+			
+			onlineChoice = new ChoiceGroup("Server-side resizing", ChoiceGroup.POPUP, new String[] {
+					"Enabled", "Disabled"
+			}, null);
+			onlineChoice.setSelectedIndex(onlineResize ? 0 : 1, true);
+			f.append(onlineChoice);
+
+			proxyField = new TextField("Proxy URL", proxyUrl, 200, TextField.URL);
+			f.append(proxyField);
+			
+			
+			display(settingsForm = f);
+			return;
+		}
+		if (d == settingsForm && c == backCmd) {
+			proxyUrl = proxyField.getString();
+			apiMode = apiChoice.getSelectedIndex();
+			limit = Integer.parseInt(limitChoice.getString(limitChoice.getSelectedIndex()));
+			viewMode = viewChoice.getSelectedIndex();
+			onlineResize = onlineChoice.isSelected(0);
+			
+			mainLabel.setText(API_NAMES[apiMode]);
+			
+			try {
+				RecordStore.deleteRecordStore(SETTINGS_RMS);
+			} catch (Exception e) {}
+			try {
+				JSONObject j = new JSONObject();
+				j.put("proxy", proxyUrl);
+				j.put("apiMode", apiMode);
+				j.put("limit", limit);
+				j.put("viewMode", viewMode);
+				j.put("keepBitmap", keepBitmap);
+				j.put("onlineResize", onlineResize);
+				
+				byte[] b = j.toString().getBytes("UTF-8");
+				RecordStore r = RecordStore.openRecordStore(SETTINGS_RMS, true);
+				r.addRecord(b, 0, b.length);
+				r.closeRecordStore();
+			} catch (Exception e) {}
+			display(mainForm);
+			return;
+		}
 		if (c == exitCmd) {
 			notifyDestroyed();
 			return;
@@ -305,7 +389,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			f.setCommandListener(this);
 			
 			StringItem s;
-			s = new StringItem(null, "unnamed booru j2me reader v" + version);
+			s = new StringItem(null, "unnamed booru j2me client v" + version);
 			s.setFont(largefont);
 			s.setLayout(Item.LAYOUT_NEWLINE_AFTER | Item.LAYOUT_NEWLINE_BEFORE);
 			f.append(s);
@@ -620,6 +704,8 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 						String url = (String) o[0];
 						ImageItem item = (ImageItem) o[1];
 						
+						if (url == null) continue;
+						
 						try { 
 							Image img = getImage(proxyUrl(url));
 
@@ -660,7 +746,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 	private String getPreviewUrl(JSONObject p) {
 		if (apiMode == API_DANBOORU) {
 //			return p.getObject("media_asset").getArray("variants").getObject(0).getString("url");
-			return p.getString("preview_file_url");
+			return p.getString("preview_file_url", null);
 		}
 		if (apiMode == API_GELBOORU || apiMode == API_YANDERE) {
 			return p.getString("preview_url");
@@ -669,7 +755,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			return p.getObject("preview").getString("url");
 		}
 		if (apiMode == API_SAFEBOORU) {
-			return SAFEBOORU_URL + "thumbnails/" + p.getString("directory") + "/thumbnail_" + p.getString("image") + '?' + p.getString("id");
+			return API_URLS[apiMode] + "thumbnails/" + p.getString("directory") + "/thumbnail_" + p.getString("image") + '?' + p.getString("id");
 		}
 		return null;
 	}
@@ -769,33 +855,12 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 	// http
 	
 	private static AbstractJSON api(String url) throws IOException {
-		String domain;
-		switch (apiMode) {
-		case API_DANBOORU:
-			domain = DANBOORU_URL;
-			break;
-		case API_GELBOORU:
-			domain = GELBOORU_URL;
-			break;
-		case API_SAFEBOORU:
-			domain = SAFEBOORU_URL;
-			break;
-		case API_YANDERE:
-			domain = YANDERE_URL;
-			break;
-		case API_E621:
-			domain = E621_URL;
-			break;
-		default:
-			throw new RuntimeException("api");
-		}
-		
 		AbstractJSON res;
 
 		HttpConnection hc = null;
 		InputStream in = null;
 		try {
-			hc = open(proxyUrl(domain.concat(url)));
+			hc = open(proxyUrl(API_URLS[apiMode].concat(url)));
 			hc.setRequestMethod("GET");
 			int c;
 			if ((c = hc.getResponseCode()) >= 400) {
