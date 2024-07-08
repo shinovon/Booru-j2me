@@ -53,25 +53,27 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 	private static final int RUN_POSTS = 1;
 	private static final int RUN_POST = 2;
 	private static final int RUN_THUMBNAILS = 3;
-	private static final int RUN_VIEW_POST = 4;
+	static final int RUN_ZOOM_VIEW = 5;
 	
 	private static final int API_DANBOORU = 1;
 	private static final int API_GELBOORU = 2;
 	private static final int API_SAFEBOORU = 3;
-	private static final int API_E621 = 4;
+	private static final int API_YANDERE = 4;
+	private static final int API_E621 = 5;
 	
 	private static final String DANBOORU_URL = "https://danbooru.donmai.us/";
 	private static final String GELBOORU_URL = "https://gelbooru.com/";
 	private static final String SAFEBOORU_URL = "https://safebooru.org/";
+	private static final String YANDERE_URL = "https://yande.re/";
 	private static final String E621_URL = "https://e621.net/";
 
 
 	private static final Font largefont = Font.getFont(0, 0, Font.SIZE_LARGE);
 	private static final Font medboldfont = Font.getFont(0, Font.STYLE_BOLD, Font.SIZE_MEDIUM);
-	private static final Font smallfont = Font.getFont(0, 0, Font.SIZE_SMALL);
+	static final Font smallfont = Font.getFont(0, 0, Font.SIZE_SMALL);
 	private static final Font selectedpagefont = Font.getFont(0, Font.STYLE_BOLD | Font.STYLE_ITALIC, Font.SIZE_SMALL);
 
-	private static boolean started;
+	public static bIApp midlet;
 	private static Display display;
 	
 	private static Command exitCmd;
@@ -92,6 +94,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 	private static Form mainForm;
 	private static Form postsForm;
 	private static Form postForm;
+	private static ViewCommon view;
 	
 	private static TextField searchField;
 	
@@ -105,10 +108,14 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 	private static Object thumbLoadLock = new Object();
 	private static Vector thumbsToLoad = new Vector();
 	private static Hashtable previewUrlsCache = new Hashtable();
+	private static Hashtable posts = new Hashtable();
 	
 	// settings
 	private static String proxyUrl = "http://nnp.nnchan.ru/hproxy.php?";
 	private static int apiMode = API_DANBOORU;
+	static int viewMode = 1;
+	static boolean onlineResize = true;
+	static boolean keepBitmap;
 	
 	private static Image postPlaceholderImg = null;
 	
@@ -125,8 +132,8 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 	protected void pauseApp() {}
 
 	protected void startApp() {
-		if (started) return;
-		started = true;
+		if (midlet != null) return;
+		midlet = this;
 		
 		version = getAppProperty("MIDlet-Version");
 		display = Display.getDisplay(this);
@@ -163,6 +170,9 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			break;
 		case API_E621:
 			t = "e621";
+			break;
+		case API_YANDERE:
+			t = "yande.re";
 			break;
 		default:
 			t = "something";
@@ -210,6 +220,8 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 		if (d == postsForm) {
 			if (c == backCmd) {
 				display(mainForm);
+				posts.clear();
+				previewUrlsCache.clear();
 				postsForm = null;
 				return;
 			}
@@ -231,6 +243,52 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 				postForm = null;
 				return;
 			}
+		}
+		if (c == nextPageCmd || c == prevPageCmd) {
+			if (running) return;
+			if (c == nextPageCmd) ++page;
+			else if (--page < 1) page = 1;
+			Form f = new Form("Posts");
+			f.addCommand(backCmd);
+			f.setCommandListener(this);
+			
+			f.setTicker(new Ticker("Loading..."));
+			
+			display(postsForm = f);
+			start(RUN_POSTS);
+			return;
+		}
+		if (c == showPostCmd || c == downloadCmd) {
+			try {
+				if (post == null) return;
+				String url = getFile(post, c == downloadCmd);
+				if (url == null)
+					return;
+				
+				if (c != downloadCmd && (url.endsWith("jpg") || url.endsWith("jpeg") || url.endsWith("png") || url.endsWith("webm"))) {
+					if (bIApp.viewMode == 1) {
+						view = new ViewCommon(false);
+					} else if (bIApp.viewMode == 2) {
+						view = new ViewHWA();
+					} else {
+						String vram = System.getProperty("com.nokia.gpu.memory.total");
+						if (vram != null && !vram.equals("0")) {
+							view = new ViewHWA();
+						} else {
+							view = new ViewCommon(false);
+						}
+					}
+					display(view);
+					return;
+				}
+				
+				if (platformRequest(proxyUrl(url)))
+					notifyDestroyed();
+			} catch (Throwable e) {
+				e.printStackTrace();
+				display(errorAlert(e.toString()), postForm);
+			}
+			return;
 		}
 		if (c == exitCmd) {
 			notifyDestroyed();
@@ -275,37 +333,9 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			display(f);
 			return;
 		}
-		if (c == nextPageCmd || c == prevPageCmd) {
-			if (running) return;
-			if (c == nextPageCmd) ++page;
-			else if (--page < 1) page = 1;
-			Form f = new Form("Posts");
-			f.addCommand(backCmd);
-			f.setCommandListener(this);
-			
-			f.setTicker(new Ticker("Loading..."));
-			
-			display(postsForm = f);
-			start(RUN_POSTS);
-			return;
-		}
 	}
 
 	public void commandAction(Command c, Item item) {
-		if (c == showPostCmd || c == downloadCmd) {
-			try {
-				if (post == null) return;
-				String url = getFile(post);
-				if (url == null)
-					return;
-				if (platformRequest(proxyUrl(url)))
-					notifyDestroyed();
-			} catch (Exception e) {
-				e.printStackTrace();
-				display(errorAlert(e.toString()), postForm);
-			}
-			return;
-		}
 		if (c == postItemCmd) {
 			if (running) return;
 			thumbsToLoad.removeAllElements();
@@ -365,6 +395,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 		case RUN_POSTS: {
 			Form f = postsForm;
 			previewUrlsCache.clear();
+			posts.clear();
 			
 			try {
 				StringBuffer sb = new StringBuffer(query != null ? "Search" : "Posts");
@@ -385,6 +416,12 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 					
 					if (page > 0)
 						sb.append("&pid=").append(page);
+					break;
+				case API_YANDERE:
+					sb.append("post.json?");
+					
+					if (page > 0)
+						sb.append("&page=").append(page);
 					break;
 				default:
 					sb.append("posts.json?");
@@ -421,6 +458,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 					item.setItemCommandListener(this);
 					f.append(item);
 					
+					bIApp.posts.put(item, p);
 					if ((url = getPreviewUrl(p)) != null) {
 						scheduleThumb(item, url);
 						previewUrlsCache.put(id, url);
@@ -441,6 +479,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 		case RUN_POST: {
 			String id = postId;
 			Image thumb = postItem != null ? postItem.getImage() : null;
+			JSONObject post = postItem != null ? (JSONObject) posts.get(postItem) : null;
 			postItem = null;
 			
 			Form f = postForm;
@@ -448,6 +487,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			ImageItem item = new ImageItem("", thumb, Item.LAYOUT_LEFT | Item.LAYOUT_NEWLINE_AFTER, id, Item.BUTTON);
 			
 			item.addCommand(showPostCmd);
+			item.addCommand(downloadCmd);
 			item.setDefaultCommand(showPostCmd);
 			item.setItemCommandListener(this);
 			f.append(item);
@@ -455,22 +495,26 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			StringItem s;
 			
 			try {
-				StringBuffer sb = new StringBuffer();
-				switch (apiMode) {
-				case API_SAFEBOORU:
-				case API_GELBOORU:
-					sb.append("index.php?page=dapi&s=post&q=index&json=1&id=").append(id);
-					break;
-				default:
-					sb.append("posts/").append(id).append(".json");
-				}
-				JSONObject post = (JSONObject) api(sb.toString());
-				if (post.has("post")) {
-					Object t = post.get("post");
-					if (t instanceof JSONArray) {
-						post = ((JSONArray) t).getObject(0);
-					} else {
-						post = (JSONObject) t;
+				if (post == null) {
+					StringBuffer sb = new StringBuffer();
+					switch (apiMode) {
+					case API_SAFEBOORU:
+					case API_GELBOORU:
+						sb.append("index.php?page=dapi&s=post&q=index&json=1&id=").append(id);
+						break;
+					case API_YANDERE:
+						throw new Exception("not supported");
+					default:
+						sb.append("posts/").append(id).append(".json");
+					}
+					post = (JSONObject) api(sb.toString());
+					if (post.has("post")) {
+						Object t = post.get("post");
+						if (t instanceof JSONArray) {
+							post = ((JSONArray) t).getObject(0);
+						} else {
+							post = (JSONObject) t;
+						}
 					}
 				}
 				
@@ -536,6 +580,12 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 					s.setFont(medboldfont);
 					f.append(s);
 					break;
+				case API_YANDERE:
+					s = new StringItem("Tags", post.getString("tags", ""));
+					s.setLayout(Item.LAYOUT_LEFT | Item.LAYOUT_LEFT | Item.LAYOUT_NEWLINE_AFTER);
+					s.setFont(medboldfont);
+					f.append(s);
+					break;
 				default:
 					f.append(post.toString());
 				}
@@ -588,15 +638,16 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			}
 			return;
 		}
-		case RUN_VIEW_POST: {
-			// TODO
+		case RUN_ZOOM_VIEW: {
+			if (view == null) break;
+			view.resize((int) view.zoom);
 			break;
 		}
 		}
 		running = false;
 	}
 
-	private void start(int i) {
+	void start(int i) {
 		try {
 			synchronized(this) {
 				run = i;
@@ -611,8 +662,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 //			return p.getObject("media_asset").getArray("variants").getObject(0).getString("url");
 			return p.getString("preview_file_url");
 		}
-		if (apiMode == API_GELBOORU) {
-//			return GELBOORU_URL + "thumbnails/" + p.getString("directory") + "/thumbnail_" + p.getString("image") + '?' + p.getString("id");
+		if (apiMode == API_GELBOORU || apiMode == API_YANDERE) {
 			return p.getString("preview_url");
 		}
 		if (apiMode == API_E621) {
@@ -624,10 +674,12 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 		return null;
 	}
 
-	private String getFile(JSONObject p) {
-		if (apiMode == API_DANBOORU || apiMode == API_GELBOORU) {
+	private static String getFile(JSONObject p, boolean full) {
+		if (apiMode == API_DANBOORU  || apiMode == API_GELBOORU || apiMode == API_YANDERE) {
 			if (p.has("large_file_url"))
 				return p.getString("large_file_url");
+			if (p.has("sample_url") && !full)
+				return p.getString("sample_url");
 			return p.getString("file_url");
 		}
 		if (apiMode == API_E621) {
@@ -678,8 +730,13 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			thumbLoadLock.notifyAll();
 		}
 	}
+
+	static byte[] getPostImage(String s) throws IOException {
+		if (s == null) s = "";
+		return get(proxyUrl(getFile(post, false).concat(s)));
+	}
 	
-	private static void display(Alert a, Displayable d) {
+	static void display(Alert a, Displayable d) {
 		if(d == null) {
 			display.setCurrent(a);
 			return;
@@ -687,12 +744,18 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 		display.setCurrent(a, d);
 	}
 
-	private static void display(Displayable d) {
+	static void display(Displayable d) {
 		if(d instanceof Alert) {
 			display.setCurrent((Alert) d, mainForm);
 			return;
 		}
+		if (d == null)
+			d = postForm != null ? postForm : postsForm != null ? postForm : mainForm;
+		Displayable p = display.getCurrent();
 		display.setCurrent(d);
+		if (p instanceof ViewCommon) {
+			view = null;
+		}
 	}
 
 	private static Alert errorAlert(String text) {
@@ -716,6 +779,9 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			break;
 		case API_SAFEBOORU:
 			domain = SAFEBOORU_URL;
+			break;
+		case API_YANDERE:
+			domain = YANDERE_URL;
 			break;
 		case API_E621:
 			domain = E621_URL;
@@ -863,7 +929,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 	
 	// image utils
 
-	private static Image resize(Image src_i, int size_w, int size_h) {
+	static Image resize(Image src_i, int size_w, int size_h) {
 		// set source size
 		int w = src_i.getWidth();
 		int h = src_i.getHeight();
@@ -965,5 +1031,31 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 						| (c2_RB + ((((c34 & 0x00FF00FF) - c2_RB) * v1) >> 8)) & 0x00FF00FF;
 			}
 		}
+	}
+
+	/**
+	 * Part of tube42 imagelib. Blends 2 colors.
+	 * 
+	 * @param c1
+	 * @param c2
+	 * @param value256
+	 * @return Blended value.
+	 */
+	public static final int blend(final int c1, final int c2, final int value256) {
+
+		final int v1 = value256 & 0xFF;
+		final int c1_RB = c1 & 0x00FF00FF;
+		final int c2_RB = c2 & 0x00FF00FF;
+
+		final int c1_AG = (c1 >>> 8) & 0x00FF00FF;
+
+		final int c2_AG_org = c2 & 0xFF00FF00;
+		final int c2_AG = (c2_AG_org) >>> 8;
+
+		// the world-famous tube42 blend with one mult per two components:
+		final int rb = (c2_RB + (((c1_RB - c2_RB) * v1) >> 8)) & 0x00FF00FF;
+		final int ag = (c2_AG_org + ((c1_AG - c2_AG) * v1)) & 0xFF00FF00;
+		return ag | rb;
+
 	}
 }
