@@ -2,6 +2,6 @@ MIDlet-Vendor: nnproject
 MIDlet-Version: 0.3.0
 MicroEdition-Configuration: CLDC-1.1
 MIDlet-1: bIApp,,bIApp
-MIDlet-Name: b
+MIDlet-Name: Booru
 MicroEdition-Profile: MIDP-2.0
-MIDlet-Jar-URL: E621.jar
+MIDlet-Jar-URL: Booru.jar
