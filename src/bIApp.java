@@ -262,22 +262,26 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 		}
 		if (c == showPostCmd || c == downloadCmd) {
 			try {
+				System.gc();
 				if (post == null) return;
 				String url = getFile(post, c == downloadCmd);
 				if (url == null)
 					return;
-				
 				if (c != downloadCmd && (url.endsWith("jpg") || url.endsWith("jpeg") || url.endsWith("png") || url.endsWith("webm"))) {
-					if (bIApp.viewMode == 1) {
-						view = new ViewCommon(false);
-					} else if (bIApp.viewMode == 2) {
-						view = new ViewHWA();
+					if (view != null) {
+						view.reload();
 					} else {
-						String vram = System.getProperty("com.nokia.gpu.memory.total");
-						if (vram != null && !vram.equals("0")) {
+						if (bIApp.viewMode == 1) {
+							view = new ViewCommon(false);
+						} else if (bIApp.viewMode == 2) {
 							view = new ViewHWA();
 						} else {
-							view = new ViewCommon(false);
+							String vram = System.getProperty("com.nokia.gpu.memory.total");
+							if (vram != null && !vram.equals("0")) {
+								view = new ViewHWA();
+							} else {
+								view = new ViewCommon(false);
+							}
 						}
 					}
 					display(view);
@@ -458,7 +462,8 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			run = bIApp.run;
 			notify();
 		}
-		running = run != RUN_THUMBNAILS;
+		if (running = run != RUN_THUMBNAILS)
+			System.gc();
 		switch (run) {
 		case RUN_POSTS: {
 			Form f = postsForm;
@@ -824,9 +829,9 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			d = postForm != null ? postForm : postsForm != null ? postForm : mainForm;
 		Displayable p = display.getCurrent();
 		display.setCurrent(d);
-		if (p instanceof ViewCommon) {
-			view = null;
-		}
+//		if (p instanceof ViewCommon) {
+//			view = null;
+//		}
 		if (p == mainForm) return;
 		if (d == postsForm) {
 			try {

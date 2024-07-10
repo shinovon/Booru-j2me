@@ -101,6 +101,7 @@ public class ViewCommon extends Canvas implements Runnable {
 				repaint();
 			}
 		} catch (OutOfMemoryError e) {
+			toDraw = orig = null;
 			bIApp.display(null);
 			try {
 				Thread.sleep(100);
@@ -265,6 +266,7 @@ public class ViewCommon extends Canvas implements Runnable {
 				e.printStackTrace();
 			}
 			bIApp.display(null);
+			toDraw = orig = null;
 			return;
 		}
 //		if (!canDraw()) {
