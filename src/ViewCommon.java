@@ -114,8 +114,8 @@ public class ViewCommon extends Canvas implements Runnable {
 
 	protected void limitOffset() {
 		if (hwa) return;
-		int hw = toDraw.getWidth() / 2;
-		int hh = toDraw.getHeight() / 2;
+		int hw = (toDraw.getWidth() - getWidth()) / 2;
+		int hh = (toDraw.getHeight() - getHeight()) / 2;
 		if (x < -hw) x = -hw;
 		if (x > hw) x = hw;
 		if (y < -hh) y = -hh;
