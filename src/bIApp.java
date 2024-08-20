@@ -118,6 +118,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 	private static TextField proxyField;
 	private static ChoiceGroup viewChoice;
 	private static ChoiceGroup onlineChoice;
+	private static ChoiceGroup proxyChoice;
 	
 	private static int run;
 	private static boolean running;
@@ -138,6 +139,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 	static boolean onlineResize = true;
 	static boolean keepBitmap;
 //	private static int thumbSize;
+	private static boolean useProxy = true;
 	
 	private static Image postPlaceholderImg = null;
 	
@@ -187,6 +189,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			viewMode = j.getInt("viewMode", viewMode);
 			keepBitmap = j.getBoolean("keepBitmap", keepBitmap);
 			onlineResize = j.getBoolean("onlineResize", onlineResize);
+			useProxy = j.getBoolean("useProxy", useProxy);
 		} catch (Exception e) {}
 		
 		Form f = new Form("ы");
@@ -330,6 +333,10 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			proxyField = new TextField("Proxy URL", proxyUrl, 200, TextField.URL);
 			f.append(proxyField);
 			
+			proxyChoice = new ChoiceGroup("", ChoiceGroup.MULTIPLE, new String[] { "Use proxy" }, null);
+			proxyChoice.setSelectedIndex(0, useProxy);
+			f.append(proxyChoice);
+			
 			display(settingsForm = f);
 			return;
 		}
@@ -339,6 +346,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 			limit = Integer.parseInt(limitChoice.getString(limitChoice.getSelectedIndex()));
 			viewMode = viewChoice.getSelectedIndex();
 			onlineResize = onlineChoice.isSelected(0);
+			useProxy = proxyChoice.isSelected(0);
 			
 			mainLabel.setText(API_NAMES[apiMode]);
 			
@@ -353,6 +361,7 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 				j.put("viewMode", viewMode);
 				j.put("keepBitmap", keepBitmap);
 				j.put("onlineResize", onlineResize);
+				j.put("useProxy", useProxy);
 				
 				byte[] b = j.toString().getBytes("UTF-8");
 				RecordStore r = RecordStore.openRecordStore(SETTINGS_RMS, true);
@@ -954,7 +963,9 @@ public class bIApp extends MIDlet implements Runnable, CommandListener, ItemComm
 	
 	private static String proxyUrl(String url) {
 		System.out.println(url);
-		if(url == null || proxyUrl.length() == 0 || "https://".equals(proxyUrl)) {
+		if (url == null
+				|| (!useProxy && (url.indexOf(";tw=") == -1 || !onlineResize))
+				|| proxyUrl == null || proxyUrl.length() == 0 || "https://".equals(proxyUrl)) {
 			return url;
 		}
 		return proxyUrl + url(url);
